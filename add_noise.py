@@ -6,26 +6,43 @@ import math
 import matplotlib.pyplot as plt
 import astra
 import multiprocessing as mp
+import scipy.ndimage as ndi
+import time
+import argparse
+def get_direct(img,dso,dod,det_cols,det_rows,angles,detector_pixel_size=1,mac=4e-4):
 
-def get_direct(img,dso,dod,det_cols,det_rows):
-    
-    # img = 3D volume
-    # dso = source to object distance in mm
-    # dod = object to detector distance in mm
-    
-    proj_geom = astra.create_proj_geom('cone', 1,1,det_cols,det_rows, angles,dso,dod);
+    img[img<0] = 0
+    vol_geom = astra.create_vol_geom(img.shape[0],img.shape[1],img.shape[2])
+
+    proj_geom = astra.create_proj_geom('cone', 1,1,det_cols,det_rows, angles,(dso+dod)/detector_pixel_size,0); 
+    # transformation so that detector pixel spacing is 1 mm
+    # based on https://tomroelandts.com/articles/astra-toolbox-tutorial-reconstruction-from-projection-images-part-2
     proj_id = astra.create_projector('cuda3d', proj_geom, vol_geom)
     W = astra.OpTomo(proj_id)
-
-    spun = img.transpose((2,1,0)) # transposing so that detector and source are perpendicular to plane of interest
-    fp = W*(spun.reshape(-1))
-    fp = fp/fp.max()
+    spun = img.transpose((2,1,0)) 
+    # transposing so that detector and source are perpendicular to plane of interest
+#     print(spun.dtype)
+    fp = (W*(spun.reshape(-1))).reshape((det_rows,len(angles),det_cols)) # multiply by mass attenuation coeff
+    fp = fp*mac
+#     print(fp)
+    return np.exp(-fp)
     
-    return np.exp(-fp.reshape(det_rows,len(angles),det_cols))
-    
+from numpy.random import MT19937
 
-def add_noise(direct):
-    # adds noise to a single direct radiograph
+from numpy.random import RandomState, SeedSequence
+
+def add_noise(args):
+    # adds noise to a single direct radiographic slice
+    direct=args[0]
+    idx = args[1]
+#     print(idx)
+    rs = RandomState(MT19937(SeedSequence(123456789*idx)))
+
+    fact = 2560/direct.shape[0]
+    ### Jennie's code works for 2560x2560 sized radiographic slice, 
+    ### so the direct is blown up to 2560x2560 first, after that it is downsampled
+    direct = ndi.zoom(direct,(fact,fact))
+    
     
     f = open('gamma_kernel.dat', 'r')
     gamma = np.genfromtxt(f)
@@ -56,7 +73,6 @@ def add_noise(direct):
     angle = (np.random.choice(gaussian_angle,1))
 
     gaussian_2D_kernel = Gaussian2DKernel(xstep, ystep, angle, x_size=141, y_size=141)
-    #     gaussian_2D_kernel = Gaussian2DKernel(xstep, ystep, angle, x_size=37, y_size=37)
 
 
     imgconlv1 = signal.fftconvolve(direct, gaussian_2D_kernel, mode='same')
@@ -118,18 +134,67 @@ def add_noise(direct):
 
     signalblurscatternoise = (normsignal + correlatedgamma + correlatedphoton) * maxtotalsig
 
-    noisy_direct[c,:,:] = signalblurscatternoise
+    noisy_direct = signalblurscatternoise
 
-    c+=1
-    
-    noisy_direct = zoom(noisy_direct,[1,fact,fact])
+    noisy_direct = ndi.zoom(noisy_direct,[1/fact,1/fact])
     
     return noisy_direct
 
+
+def make_noisy_rad(img_dir,dso=1592,dod=488,det_cols = 672,
+           det_rows=672,
+         angles=np.linspace(0,np.pi,8,endpoint=False),
+         detector_pixel_size=1,mac=4e-4,
+         save_dir='/mnt/Data/noisy_radiographs/'):
+    
+    
+    # outputs a single numpy file with noisy radiographic slices in the shape det_rows x num_angles x det_cols
+    """    
+    # img_dir = directory of 3D volume
+    # dso = source to object distance in mm
+    # dod = object to detector distance in mm
+    # angles = array of angles in radians from which projections are being taken
+    # detector_pixel_size = width of detector pixel in mm
+    # mac = in mm^2/gram
+    # save_dir = location to save radiograph. example -  /dir/to/your/file.npy
+    """
+    img = np.load(img_dir) # loads numpy file of spun image
+    direct = get_direct(img,dso,dod,det_cols,det_rows,angles,detector_pixel_size,mac=4e-4) 
+    # this will be of size det_cols x num_angles x det_rows    
+    # apply noise to each slice parallely.
+    cpu_count = 4
+    index = np.arange(0,len(angles))
+    batch_idx = [index[k:k+cpu_count] for k in range(0,len(angles),cpu_count)]
+    
+    noisy_radiograph = np.zeros_like(direct)
+#     print(direct.shape)
+    
+    for idx_b in batch_idx:
+#         print(idx_b)
+        pool = mp.Pool(cpu_count)
+        res = pool.map(add_noise,[(direct[:,kk,:],kk) for kk in idx_b])
+        pool.close()
+        pool.join()
+        print(idx_b)
+        for k in idx_b:
+            print(k)
+            noisy_radiograph[:,k,:] = res[k%cpu_count]
+        
+    np.save(save_dir,noisy_radiograph)        
+            
 if __name__=="__main__":
-    cpu_count = 2 # choose how many cpus to use to parallelize the spinning
+    
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path',type=str,help='path of a 3D volume',default='/mnt/Data/HydroSim_spin/1.npy')
     
+    parser.add_argument('--img_dir',type=str,help='path of a 3D volume',default='/mnt/Data/HydroSim_spin/1.npy')
+    parser.add_argument('--save_dir',type=str,help='path of a 3D volume',default='/mnt/Data/HydroSim_spin_noisy_radiographs/1.npy')
+    args = parser.parse_args()
     
+    t = time.time()
     
+    make_noisy_rad(img_dir = args.img_dir,
+         save_dir=args.save_dir)
+    
+    print(time.time()-t)
+    
+    # about 10-11 seconds to do this

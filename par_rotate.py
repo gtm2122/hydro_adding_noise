@@ -52,7 +52,6 @@ def spin_image(args):
 
         spun_img = np.zeros((700,700,700))
 
-        
         for cc in range(0,700):
             #interpolate concentric circles seen in the top view ie plane 0-1
             
@@ -89,41 +88,41 @@ def spin_image(args):
                                               (img.shape[0]//2, img.shape[1]//2), 
                                               value, 
                                               cv2.WARP_INVERSE_MAP)
-        np.save(save_path+'/'+str(index)+'.npy',spun_img)
+        np.save(save_path+'/'+str(i)+'.npy',spun_img)
 #         return spun_img
 
+def rotate_img(path,save_path,cpu_count=4):
+    rho_seq = get_rho(filename=path)
+    rho_idx = np.arange(0,len(rho_seq))
+    
+    batch_idx = [rho_idx[i:i+cpu_count] for i in range(0,len(rho_idx),cpu_count)]
+    
+    os.makedirs(save_path,exist_ok=True)
+    
+    res = []
+    result = []
+    t=time.time()
+#     print(batch_idx)
+    for batch in batch_idx[:]:
+        print(batch)
+        pool = mp.Pool(cpu_count)
+        batch_rho = [(rho_seq[k],k,save_path) for k in batch]
+        pool.map(spin_image,batch_rho) 
+        pool.close()
+        pool.join()
+
 if __name__=="__main__":
+    
     cpu_count = 4 # choose how many cpus to use to parallelize the spinning
-    
-    
     parser = argparse.ArgumentParser()
     parser.add_argument('--path',type=str,help='path of a single sequence',default='/mnt/Data/HydroSim_googledrive/data_ta_2d_profile0.vel0.mgrg00.s10.cs2.cv1.ptwg00.nc')
     parser.add_argument('--save_path',type=str,help='path of a single sequence',default='/mnt/Data/HydroSim_spin/')
     # make batch of inputs
     args = parser.parse_args()
-    
-    if not os.path.isdir(args.save_path):
-        os.makedirs(args.save_path)
-    
-    rho_seq = get_rho(filename=args.path)
-    rho_idx = np.arange(0,len(rho_seq))
-    
-    batch_idx = [rho_idx[i:i+cpu_count] for i in range(0,len(rho_idx),cpu_count)]
-    
-    res = []
-    result = []
-    t=time.time()
-    
-    for batch in batch_idx[:1]:
-        pool = mp.Pool(cpu_count)
-        batch_rho = [(rho_seq[k],k,args.save_path) for k in batch]
-        # res contains list of spun images, it has length = cpu_count
-        pool.map(spin_image,batch_rho) 
-        pool.close()
-        pool.join()
-    
+    t = time.time()
+    rotate_img(path=args.path,save_path=args.save_path,cpu_count=cpu_count)
     print(time.time()-t)
-    
+    # about 130-140 seconds to do this
 
     
     
