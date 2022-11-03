@@ -4,7 +4,7 @@ import os
 import time
 
 if __name__=="__main__":
-    nc_loc = '/mnt/Data/HydroSim_googledrive/data_ta_2d_profile0.vel0.mgrg00.s10.cs2.cv1.ptwg00.nc' # directory of .nc file
+    nc_loc = '/mnt/Data/HydroSim_googledrive/data_ta_2d_profile0.vel0.mgrg00.s10.cs2.cv1.ptwg00.nc' # location of .nc file
     spun_img_save_dir = '/mnt/Data/HydroSim_spin/data_ta_2d_profile0.vel0.mgrg00.s10.cs2.cv1.ptwg00/'
     noisy_rad_save_dir = '/mnt/Data/HydroSim_spin_noisy_radiographs/data_ta_2d_profile0.vel0.mgrg00.s10.cs2.cv1.ptwg00/'
     t = time.time()
