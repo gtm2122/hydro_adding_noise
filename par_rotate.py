@@ -10,7 +10,7 @@ import torch
 import time
 
 # currently the parallelism is in the sequence level meaning I apply the spin function to more than one sequence simultaneously,
-# but a better parallelism can be acheived if parallelism was applied to spin_image function in the inner loop (TODO)
+# but a better parallelism can be acheived if applied to spin_image function in the inner loop (TODO)
 
 def get_rho(filename,clampval=50,crop_pixel=350):
     
@@ -40,25 +40,27 @@ def spin_image(args):
     if None not in args[0]:
         rho_clean = args[0]
         index = args[1]
-            
+        save_path = args[2]
             
         ### initialize empty volume
         
         vol2 = np.zeros((rho_clean.shape[1],rho_clean.shape[1],rho_clean.shape[1]),dtype=rho_clean.dtype)
-        vol2[rho_clean.shape[1]//2,:,:] = rho_clean # middle 1-2 plane (sometimes known as x-y plane) gets rho_clean image
-        vol2[:,rho_clean.shape[1]//2,:]= rho_clean # middle 0-2 plane gets rho_clean image
+        vol2[rho_clean.shape[1]//2,:,:] = rho_clean 
+        # middle 1-2 plane (sometimes known as x-y plane) gets rho_clean image
+        vol2[:,rho_clean.shape[1]//2,:]= rho_clean 
+        # middle 0-2 plane gets rho_clean image
 
         spun_img = np.zeros((700,700,700))
 
+        
         for cc in range(0,700):
-            #interpolate along circular path when looking along the 0-1 plane direction vector slice by slice
+            #interpolate concentric circles seen in the top view ie plane 0-1
             
             img = vol2[:,:,cc].copy()
             value = np.sqrt(((img.shape[0]/2)**2.0)+((img.shape[1]/2)**2.0))
 
             polar_image = cv2.linearPolar(img,(img.shape[0]/2, img.shape[1]/2), value, cv2.WARP_FILL_OUTLIERS) 
-            # conversion to polar coordinates and then interpolating between the straight lines worked better than
-            # interpolating on the integer coordinates of each circle in the 0-1 plane (Why ? Nyquist Criterion ? )
+            # conversion to polar coordinates and then interpolating between the straight lines 
 
             new_image = polar_image.copy()
 
@@ -72,7 +74,7 @@ def spin_image(args):
                                                         kind='linear', 
                                                         axis= -1, 
                                                         copy=True, 
-                                                        bounds_error=None,
+                                                         bounds_error=None,
                                                         fill_value=0, 
                                                         assume_sorted=False)
                     for k in range(0,len(locs)-1):
@@ -87,11 +89,8 @@ def spin_image(args):
                                               (img.shape[0]//2, img.shape[1]//2), 
                                               value, 
                                               cv2.WARP_INVERSE_MAP)
-
-        return spun_img
-
-import pickle   
-
+        np.save(save_path+'/'+str(index)+'.npy',spun_img)
+#         return spun_img
 
 if __name__=="__main__":
     cpu_count = 4 # choose how many cpus to use to parallelize the spinning
@@ -115,16 +114,13 @@ if __name__=="__main__":
     result = []
     t=time.time()
     
-    for batch in batch_idx[:]:
+    for batch in batch_idx[:1]:
         pool = mp.Pool(cpu_count)
-        batch_rho = [(rho_seq[k],k) for k in batch]
-        res = pool.map(spin_image,batch_rho)
+        batch_rho = [(rho_seq[k],k,args.save_path) for k in batch]
+        # res contains list of spun images, it has length = cpu_count
+        pool.map(spin_image,batch_rho) 
         pool.close()
         pool.join()
-        
-        for r in range(0,len(res)):
-            np.save(r,args.save_path+'/'+r+'.npy') # save results
-#         result+=res
     
     print(time.time()-t)
     
