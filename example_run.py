@@ -10,14 +10,21 @@ if __name__=="__main__":
     t = time.time()
     rotate_img(path=nc_loc,save_path=spun_img_save_dir) 
     # this will load the .nc file and start making spun images for ALL time points, 
-    # if you want to spun images for certain elements then please modify the get_rho function
+    # if you want to spin images for certain time points in your sequence rather than ALL time points then,
+    # please modify the get_rho function so that it outputs a sequence of desriable time points.
     
-    print('time taken to produce spun images - ',time.time()-t)
+    t1 = time.time()-t    
+    print('time taken to produce spun images - ',t1)
     
     t = time.time()
+    
+    os.makedirs(noisy_rad_save_dir,exist_ok=True)
+    
     for k in os.listdir(spun_img_save_dir):
+        
         make_noisy_rad(img_dir = spun_img_save_dir+'/'+k, save_dir=noisy_rad_save_dir+'/'+k)
     
-    print('time taken to produce noisy radiographs for all the spun images - ',time.time()-t)
+    t2 = time.time()-t
+    print('time taken to produce noisy radiographs for all the spun images - ',t2)
     
-    print('total time taken to produce noisy radiographs for all the spun images in all the frames of sequence')
+    print('total time taken - ', t1+t2)

@@ -89,7 +89,7 @@ def spin_image(args):
                                               value, 
                                               cv2.WARP_INVERSE_MAP)
         np.save(save_path+'/'+str(index)+'.npy',spun_img)
-#         return spun_img
+
 
 def rotate_img(path,save_path,cpu_count=4):
     rho_seq = get_rho(filename=path)
@@ -99,18 +99,19 @@ def rotate_img(path,save_path,cpu_count=4):
     
     os.makedirs(save_path,exist_ok=True)
     
-    res = []
     result = []
     t=time.time()
 #     print(batch_idx)
-    for batch in batch_idx[:1]:
+    for batch in batch_idx[:]:
         print(batch)
         pool = mp.Pool(cpu_count)
         batch_rho = [(rho_seq[k],k,save_path) for k in batch]
         pool.map(spin_image,batch_rho) 
         pool.close()
         pool.join()
-
+        
+        
+        
 if __name__=="__main__":
     
     cpu_count = 4 # choose how many cpus to use to parallelize the spinning
@@ -122,7 +123,7 @@ if __name__=="__main__":
     t = time.time()
     rotate_img(path=args.path,save_path=args.save_path,cpu_count=cpu_count)
     print(time.time()-t)
-    # about 130-140 seconds to do this
+    # about 120-140 seconds to do this
 
     
     

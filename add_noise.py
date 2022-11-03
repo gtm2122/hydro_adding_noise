@@ -179,7 +179,7 @@ def make_noisy_rad(img_dir,dso=1592,dod=488,det_cols = 672,
         for k in idx_b:
             print(k)
             noisy_radiograph[:,k,:] = res[k%cpu_count]
-        
+    
     np.save(save_dir,noisy_radiograph)        
             
 if __name__=="__main__":
