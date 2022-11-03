@@ -22,8 +22,12 @@ if __name__=="__main__":
     
     for k in os.listdir(spun_img_save_dir):
         
-        make_noisy_rad(img_dir = spun_img_save_dir+'/'+k, save_dir=noisy_rad_save_dir+'/'+k)
-    
+        make_noisy_rad(img_dir = spun_img_save_dir+'/'+k, save_dir=noisy_rad_save_dir+'/'+k,
+                        dso=1592,dod=488,det_cols = 672,
+                        det_rows=672,
+                        angles=np.linspace(0,np.pi,8,endpoint=False),
+                        detector_pixel_size=1,mac=4e-4)
+
     t2 = time.time()-t
     print('time taken to produce noisy radiographs for all the spun images - ',t2)
     
