@@ -88,7 +88,7 @@ def spin_image(args):
                                               (img.shape[0]//2, img.shape[1]//2), 
                                               value, 
                                               cv2.WARP_INVERSE_MAP)
-        np.save(save_path+'/'+str(i)+'.npy',spun_img)
+        np.save(save_path+'/'+str(index)+'.npy',spun_img)
 #         return spun_img
 
 def rotate_img(path,save_path,cpu_count=4):
@@ -103,7 +103,7 @@ def rotate_img(path,save_path,cpu_count=4):
     result = []
     t=time.time()
 #     print(batch_idx)
-    for batch in batch_idx[:]:
+    for batch in batch_idx[:1]:
         print(batch)
         pool = mp.Pool(cpu_count)
         batch_rho = [(rho_seq[k],k,save_path) for k in batch]
