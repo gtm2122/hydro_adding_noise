@@ -9,6 +9,7 @@ import multiprocessing as mp
 import scipy.ndimage as ndi
 import time
 import argparse
+import scipy.io as sio
 def get_direct(img,dso,dod,det_cols,det_rows,angles,detector_pixel_size=1,mac=4e-4):
 
     img[img<0] = 0
@@ -30,7 +31,26 @@ def get_direct(img,dso,dod,det_cols,det_rows,angles,detector_pixel_size=1,mac=4e
 from numpy.random import MT19937
 
 from numpy.random import RandomState, SeedSequence
+    
+f = open('kernels/gamma_kernel.dat', 'r')
+gamma = np.genfromtxt(f)
+gamma = np.reshape(gamma, (301,301))
 
+# gamma = zoom(gamma, fact)
+
+# Load Detector Blur Kernel
+f = open('kernels/photon_kernel.dat', 'r')
+photon = np.genfromtxt(f)
+
+photon = np.reshape(photon, (81,81))
+
+# photon = zoom(photon, fact)
+
+
+# Load AZ Detector Blur Kernel
+f = open('kernels/detector_blur_az.dat', 'r')
+detector = np.genfromtxt(f)
+detector = np.reshape(detector, (201,201))
 def add_noise(args):
     # adds noise to a single direct radiographic slice
     direct=args[0]
@@ -43,26 +63,7 @@ def add_noise(args):
     ### so the direct is blown up to 2560x2560 first, after that it is downsampled
     direct = ndi.zoom(direct,(fact,fact))
     
-    
-    f = open('gamma_kernel.dat', 'r')
-    gamma = np.genfromtxt(f)
-    gamma = np.reshape(gamma, (301,301))
 
-    # gamma = zoom(gamma, fact)
-
-    # Load Detector Blur Kernel
-    f = open('photon_kernel.dat', 'r')
-    photon = np.genfromtxt(f)
-
-    photon = np.reshape(photon, (81,81))
-
-    # photon = zoom(photon, fact)
-
-
-    # Load AZ Detector Blur Kernel
-    f = open('detector_blur_az.dat', 'r')
-    detector = np.genfromtxt(f)
-    detector = np.reshape(detector, (201,201))
     
     gaussian_xstep = np.arange(1.,3.1,0.1)
     gaussian_ystep = np.arange(1.,3.1,0.1)
@@ -135,17 +136,19 @@ def add_noise(args):
     signalblurscatternoise = (normsignal + correlatedgamma + correlatedphoton) * maxtotalsig
 
     noisy_direct = signalblurscatternoise
-
+    print(np.any(noisy_direct<0))
     noisy_direct = ndi.zoom(noisy_direct,[1/fact,1/fact])
+    print(np.any(noisy_direct<0))
     
+    noisy_direct[noisy_direct<0]=0 # WARNING! THIS SHOULD BE A POSITIVE VALUE OR REDONE. IN THIS VERSION IT WILL BE REDONE.
     return noisy_direct
 
 
-def make_noisy_rad(img_dir,dso=1592,dod=488,det_cols = 672,
+def make_noisy_rad(img_dir,dso=1512,dod=488,det_cols = 672,
            det_rows=672,
          angles=np.linspace(0,np.pi,8,endpoint=False),
          detector_pixel_size=1,mac=4e-4,
-         save_dir='/mnt/Data/noisy_radiographs/'):
+         save_dir='/mnt/Data/noisy_radiographs/',proj=0,par=True):
     
     
     # outputs a single numpy file with noisy radiographic slices in the shape det_rows x num_angles x det_cols
@@ -157,31 +160,57 @@ def make_noisy_rad(img_dir,dso=1592,dod=488,det_cols = 672,
     # detector_pixel_size = width of detector pixel in mm
     # mac = in mm^2/gram
     # save_dir = location to save radiograph. example -  /dir/to/your/file.npy
+    # proj = if the img_dir containing projections made by Jeff's Toolbox = 1, if the img dir containing spin imgs  = 0
     """
-    img = np.load(img_dir) # loads numpy file of spun image
-    direct = get_direct(img,dso,dod,det_cols,det_rows,angles,detector_pixel_size,mac=4e-4) 
+    if proj==0:
+        img = np.load(img_dir) # loads numpy file of spun image
+        direct = get_direct(img,dso,dod,det_cols,det_rows,angles,detector_pixel_size,mac=4e-4) 
+    else:
+        projj = np.fromfile(img_dir).reshape((len(angles),det_cols,det_rows)) # loads numpy file of spun image
+        direct = np.exp(-projj*mac)
+        direct = direct.transpose((1,0,2))
+    np.save('s.npy',direct)
     # this will be of size det_cols x num_angles x det_rows    
     # apply noise to each slice parallely.
-    cpu_count = 4
+    cpu_count = 6
     index = np.arange(0,len(angles))
     batch_idx = [index[k:k+cpu_count] for k in range(0,len(angles),cpu_count)]
     
     noisy_radiograph = np.zeros_like(direct)
 #     print(direct.shape)
+    flag=True
+    if flag:
+        if par:
+
+            for idx_b in batch_idx:
+        #         print(idx_b)
+                pool = mp.Pool(cpu_count)
+
+                res = pool.map(add_noise,[(direct[:,kk,:],kk) for kk in idx_b])
+                pool.close()
+                pool.join()
+    #             print(idx_b)
+                for k in idx_b:
+    #                 print(k)
+                    noisy_radiograph[:,k,:] = res[k%cpu_count]
+
+        else:
+
+            for idx in index:
+    #             print(direct[:,idx,:].shape)
+                noisy_radiograph[:,idx,:] = add_noise([direct[:,idx,:],idx])
+        
+        if noisy_radiograph.min()>0:
+            flag=False
     
-    for idx_b in batch_idx:
-#         print(idx_b)
-        pool = mp.Pool(cpu_count)
-        res = pool.map(add_noise,[(direct[:,kk,:],kk) for kk in idx_b])
-        pool.close()
-        pool.join()
-        print(idx_b)
-        for k in idx_b:
-            print(k)
-            noisy_radiograph[:,k,:] = res[k%cpu_count]
-    
-    np.save(save_dir,noisy_radiograph)        
-            
+    print('finished making noise')
+    if proj==0:
+        np.save(save_dir,noisy_radiograph)        
+    else:
+        
+        print('saveing in ',save_dir)
+        sio.savemat(save_dir,{'li_hat':-np.log(noisy_radiograph)/mac})
+        
 if __name__=="__main__":
     
     parser = argparse.ArgumentParser()

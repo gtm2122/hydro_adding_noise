@@ -8,7 +8,7 @@ if __name__=="__main__":
     spun_img_save_dir = '/mnt/Data/HydroSim_spin/data_ta_2d_profile0.vel0.mgrg00.s10.cs2.cv1.ptwg00/'
     noisy_rad_save_dir = '/mnt/Data/HydroSim_spin_noisy_radiographs/data_ta_2d_profile0.vel0.mgrg00.s10.cs2.cv1.ptwg00/'
     t = time.time()
-    rotate_img(path=nc_loc,save_path=spun_img_save_dir) 
+#     rotate_img(path=nc_loc,save_path=spun_img_save_dir) 
     # this will load the .nc file and start making spun images for ALL time points, 
     # if you want to spin images for certain time points in your sequence rather than ALL time points then,
     # please modify the get_rho function so that it outputs a sequence of desriable time points.
@@ -26,9 +26,8 @@ if __name__=="__main__":
                         dso=1592,dod=488,det_cols = 672,
                         det_rows=672,
                         angles=np.linspace(0,np.pi,8,endpoint=False),
-                        detector_pixel_size=1,mac=4e-4)
+                        detector_pixel_size=1,mac=4e-4,proj=0)
 
     t2 = time.time()-t
     print('time taken to produce noisy radiographs for all the spun images - ',t2)
-    
     print('total time taken - ', t1+t2)
