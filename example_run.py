@@ -31,7 +31,7 @@ if __name__=="__main__":
                         dso=1592,dod=488,det_cols = 672,
                         det_rows=672,
                         angles=np.linspace(0,np.pi,8,endpoint=False),
-                        detector_pixel_size=1,mac=4e-4,proj=0)
+                        detector_pixel_size=1,mac=0.025*4e-2,proj=0)
         if delete_spun_images:
             os.remove(spun_img_save_dir+'/'+k)
     t2 = time.time()-t
