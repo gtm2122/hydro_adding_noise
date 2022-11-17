@@ -136,9 +136,9 @@ def add_noise(args):
     signalblurscatternoise = (normsignal + correlatedgamma + correlatedphoton) * maxtotalsig
 
     noisy_direct = signalblurscatternoise
-    print(np.any(noisy_direct<0))
+#     print(np.any(noisy_direct<0))
     noisy_direct = ndi.zoom(noisy_direct,[1/fact,1/fact])
-    print(np.any(noisy_direct<0))
+#     print(np.any(noisy_direct<0))
     
     noisy_direct[noisy_direct<0]=0 # WARNING! THIS SHOULD BE A POSITIVE VALUE OR REDONE. IN THIS VERSION IT WILL BE REDONE.
     return noisy_direct

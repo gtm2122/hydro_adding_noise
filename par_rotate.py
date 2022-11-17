@@ -20,7 +20,7 @@ def get_rho(filename,clampval=50,crop_pixel=350):
     sim = xr.open_dataarray(filename)  # Reading .nc xarray file
     
 #     print(sim)
-    
+
     for i in range(nFrames):
         a=sim.isel(t=i);
         a=a[:crop_pixel,:crop_pixel] # Cropping the image to 350x350
@@ -31,9 +31,42 @@ def get_rho(filename,clampval=50,crop_pixel=350):
             
     rho=torch.tensor(rho,dtype=torch.float64)
     rho=torch.clamp(rho, min=None, max=clampval) # Clamping value at rho
+    
+    return rho.numpy().astype(np.float32)[[8,18,28,38]]
+def spin_image_new(args):
+    
+#     input are three items to help with index based naming 
+    rho_clean = args[0]
+    index = args[1]
+    save_path = args[2]
 
-    return rho.numpy().astype(np.float32)
+    ### initialize empty volume
 
+    vol2 = np.zeros((rho_clean.shape[1],rho_clean.shape[1],rho_clean.shape[1]),dtype=rho_clean.dtype)
+    vol2[rho_clean.shape[1]//2,:,:] = rho_clean 
+#         vol2[:,rho_clean.shape[1]//2+1,:] = rho_clean 
+
+    spun_img = np.zeros((700,700,700),dtype=vol2.dtype)
+
+    for cc in range(0,700):
+
+        img = vol2[:,:,cc].copy()
+        value = np.sqrt(((img.shape[0]/2)**2.0)+((img.shape[1]/2)**2.0))
+
+        polar_image = cv2.linearPolar(img,(img.shape[0]/2, img.shape[1]/2), value, cv2.WARP_FILL_OUTLIERS) 
+
+        # repeat row everywhere
+
+        polar_image = np.repeat((polar_image).max(axis=0)[np.newaxis,:],(len(polar_image)),axis=0) 
+
+        spun_img[:,:,cc] = cv2.linearPolar(polar_image,
+                                          (img.shape[0]/2, img.shape[1]/2), 
+                                          value, 
+                                          cv2.WARP_INVERSE_MAP)
+
+    np.save(save_path+'/'+str(index)+'.npy',spun_img)
+        
+#         return spun_img
 def spin_image(args):
     
     # input is a single image from a sequence produced by get_rho()
@@ -89,7 +122,8 @@ def spin_image(args):
                                               value, 
                                               cv2.WARP_INVERSE_MAP)
         np.save(save_path+'/'+str(index)+'.npy',spun_img)
-
+        
+#         return spun_img
 
 def rotate_img(path,save_path,cpu_count=4):
     rho_seq = get_rho(filename=path)
@@ -102,14 +136,15 @@ def rotate_img(path,save_path,cpu_count=4):
     result = []
     t=time.time()
 #     print(batch_idx)
-    for batch in batch_idx[:]:
+    for batch in batch_idx[:1]:
         print(batch)
         pool = mp.Pool(cpu_count)
         batch_rho = [(rho_seq[k],k,save_path) for k in batch]
-        pool.map(spin_image,batch_rho) 
+        pool.map(spin_image_new,batch_rho) 
         pool.close()
         pool.join()
-        
+#         print('done')
+    return result
         
         
 if __name__=="__main__":
