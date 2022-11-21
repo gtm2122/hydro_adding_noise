@@ -203,7 +203,7 @@ def make_noisy_rad(img_dir,dso=1512,dod=488,det_cols = 672,
         if noisy_radiograph.min()>0:
             flag=False
     
-    print('finished making noise')
+#     print('finished making noise')
     if proj==0:
         np.save(save_dir,noisy_radiograph)        
     else:
